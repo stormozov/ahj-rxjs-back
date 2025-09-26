@@ -1,0 +1,22 @@
+{
+  "name": "ahj-rxjs-back",
+  "packageManager": "yarn@4.9.1",
+  "version": "1.0.0",
+  "author": {
+    "name": "stormozov",
+    "email": "sergei.tormozow@yandex.ru"
+  },
+  "license": "MIT",
+  "scripts": {
+    "start": "yarn node server.js"
+  },
+  "dependencies": {
+    "@faker-js/faker": "^10.0.0",
+    "cors": "^2.8.5",
+    "express": "^5.1.0",
+    "pino": "^9.11.0",
+    "pino-http": "^10.5.0",
+    "pino-pretty": "^13.1.1",
+    "uuid": "^13.0.0"
+  }
+}
