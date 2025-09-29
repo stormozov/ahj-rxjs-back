@@ -22,6 +22,9 @@ app.use(cors());
 // Хранилище всех непрочитанных сообщений (в памяти)
 const unreadMessages = [];
 
+// Храним все активные SSE-соединения (для простоты — массив res)
+const sseClients = [];
+
 /**
  * Генерация случайного непрочитанного сообщения
  * @returns {Object} - Объект непрочитанного сообщения
@@ -43,9 +46,26 @@ function generateMessage() {
 function addNewMessages() {
   const newMessageCount = faker.number.int({ min: 0, max: 10 });
   const newMessages = Array.from({ length: newMessageCount }, generateMessage);
-
   unreadMessages.push(...newMessages);
   logger.info(`Added ${newMessageCount} new unread messages. Total: ${unreadMessages.length}`);
+
+  // 🔥 Отправляем событие всем подключённым SSE-клиентам
+  if (newMessageCount > 0 && sseClients.length > 0) {
+    const eventData = JSON.stringify({
+      type: 'new_unread_messages',
+      count: newMessageCount,
+      total: unreadMessages.length,
+      timestamp: Math.floor(Date.now() / 1000)
+    });
+
+    sseClients.forEach(client => {
+      try {
+        client.res.write(`event: unread_update\ndata: ${eventData}\n\n`);
+      } catch (err) {
+        logger.warn(`Failed to send SSE to client ${client.id}: ${err.message}`);
+      }
+    });
+  }
 }
 
 // Запускаем генерацию новых сообщений каждые 15 секунд
@@ -59,6 +79,39 @@ const intervalId = setInterval(() => {
     clearInterval(intervalId);
   }
 }, INTERVAL_MS);
+
+// Endpoint: GET /events/unread-updates — поток обновлений о новых сообщениях
+app.get('/events/unread-updates', (req, res) => {
+  // Устанавливаем заголовки для SSE
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache',
+    'Connection': 'keep-alive',
+    'Access-Control-Allow-Origin': '*', // важно для CORS
+  });
+
+  // Отправляем начальное событие
+  res.write('event: ping\ndata: {"status":"connected"}\n\n');
+
+  // Сохраняем соединение
+  const clientId = uuidv4();
+  const newClient = { id: clientId, res };
+  sseClients.push(newClient);
+  
+  logger.info(`SSE client connected: ${clientId}. Total clients: ${sseClients.length}`);
+
+  // Обработчик закрытия соединения
+  req.on('close', () => {
+    const idx = sseClients.findIndex(c => c.id === clientId);
+
+    if (idx !== -1) {
+      sseClients.splice(idx, 1);
+      logger.info(`SSE client disconnected: ${clientId}. Remaining: ${sseClients.length}`);
+    }
+
+    res.end();
+  });
+});
 
 // Endpoint: GET /messages/unread - получение непрочитанных сообщений
 app.get('/messages/unread', (req, res) => {
