@@ -51,7 +51,14 @@ function addNewMessages() {
 // Запускаем генерацию новых сообщений каждые 15 секунд
 const INTERVAL_MS = 15_000;
 const MAX_MESSAGES = 50;
-if (unreadMessages.length !== MAX_MESSAGES) setInterval(addNewMessages, INTERVAL_MS);
+const intervalId = setInterval(() => {
+  if (unreadMessages.length < MAX_MESSAGES) {
+    addNewMessages();
+  } else {
+    logger.info(`Maximum number (${MAX_MESSAGES}) of messages reached. Stopping message generation.`);
+    clearInterval(intervalId);
+  }
+}, INTERVAL_MS);
 
 // Endpoint: GET /messages/unread - получение непрочитанных сообщений
 app.get('/messages/unread', (req, res) => {
